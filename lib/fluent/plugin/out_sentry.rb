@@ -4,7 +4,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
   include Fluent::HandleTagNameMixin
 
   LOG_LEVEL = %w(fatal error warning info debug)
-  EVENT_KEYS = %w(message timestamp time_spent level logger culprit server_name release tags)
+  EVENT_KEYS = %w(message timestamp time_spent level logger culprit server_name release tags platform sdk device)
   DEFAULT_HOSTNAME_COMMAND = 'hostname'
 
   config_param :default_level, :string, :default => 'error'
@@ -68,9 +68,13 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
       :context => Raven::Context.new,
       :message => record['message']
     )
+    
+    event.platform = determine_platform(record['tag'])
+    event.device = 'LOGIC HERE'
+    
     event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').to_datetime : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
     event.time_spent = record['time_spent'] || nil
-    event.level = LOG_LEVEL.includes?(tag.split('.').last.downcase) || @default_level
+    event.level = LOG_LEVEL.include?(tag.split('.').last.downcase) || @default_level
     event.logger = record['logger'] || @default_logger
     event.culprit = record['culprit'] || nil
     event.server_name = record['server_name'] || @hostname
@@ -78,5 +82,18 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
     event.tags = event.tags.merge({ :tag => tag }.merge(record['tags'] || {}))
     event.extra = record.reject{ |key| EVENT_KEYS.include?(key) }
     @client.send_event(event)
+  end
+  
+  def determine_platform(record_tag)
+    tag = record_tag.downcase
+    if taginclude? "csharp-appender"
+      return "csharp"
+    elsif tag.include? "lumberjack" 
+      return "node"
+    elsif tag.include? "logback" || tag.include? "log4j"
+      return "java"
+    else
+      return "other"
+    end
   end
 end
