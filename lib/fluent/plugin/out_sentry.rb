@@ -74,7 +74,8 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
         
     event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').to_datetime : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
     event.time_spent = record['time_spent'] || nil
-    event.level = LOG_LEVEL.include?(tag.split('.').last.downcase) || @default_level
+    level = tag.split('.').last.downcase
+    event.level = LOG_LEVEL.include?(level) ? level : @default_level
     event.logger = record['logger'] || @default_logger
     event.culprit = record['culprit'] || nil
     event.server_name = record['server_name'] || @hostname
