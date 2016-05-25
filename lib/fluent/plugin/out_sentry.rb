@@ -1,15 +1,23 @@
 require 'raven'
 
+LEVEL_TRACE = 0
+LEVEL_DEBUG = 1
+LEVEL_INFO  = 2
+LEVEL_WARN  = 3
+LEVEL_ERROR = 4
+LEVEL_FATAL = 5
+
 class Fluent::SentryOutput < Fluent::BufferedOutput
   Fluent::Plugin.register_output('sentry', self)
 
   include Fluent::HandleTagNameMixin
 
-  LOG_LEVEL = %w(fatal error warning info debug)
+  LOG_LEVEL = %w(fatal error warning info debug trace)
   EVENT_KEYS = %w(message timestamp time_spent level logger culprit server_name release tags platform sdk device)
   DEFAULT_HOSTNAME_COMMAND = 'hostname'
-
+  
   config_param :default_level, :string, :default => 'error'
+  config_param :log_level, :string, :default => 'warn'
   config_param :default_logger, :string, :default => 'fluentd'
   config_param :endpoint_url, :string
   config_param :flush_interval, :time, :default => 0
@@ -17,8 +25,6 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
 
   def initialize
     require 'time'
-#    require 'raven'
-
     super
   end
 
@@ -57,14 +63,17 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
   def write(chunk)
     chunk.msgpack_each do |tag, time, record|
       begin
-        notify_sentry(tag, time, record)
+        level = tag.split('.').last.downcase
+        if (LOG_LEVEL.include?(level) && (str_to_level(level) >= str_to_level(@log_level)))
+          notify_sentry(tag, time, record, level)
+        end
       rescue => e
         $log.error("Sentry Error:", :error_class => e.class, :error => e.message)
       end
     end
   end
 
-  def notify_sentry(tag, time, record)
+  def notify_sentry(tag, time, record, level)
     event = Fluent::GFRavenEvent.new(
       :configuration => @configuration,
       :context => Raven::Context.new,
@@ -74,8 +83,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
         
     event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').to_datetime : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
     event.time_spent = record['time_spent'] || nil
-    level = tag.split('.').last.downcase
-    event.level = LOG_LEVEL.include?(level) ? level : @default_level
+    event.level = level || @default_level
     event.logger = record['logger'] || @default_logger
     event.culprit = record['culprit'] || nil
     event.server_name = record['server_name'] || @hostname
@@ -117,5 +125,17 @@ def determine_platform(record_tag)
     return "java"
   else
     return "other"
+  end
+end
+
+def str_to_level(log_level_str)
+  case log_level_str.downcase
+  when "trace" then LEVEL_TRACE
+  when "debug" then LEVEL_DEBUG
+  when "info"  then LEVEL_INFO
+  when "warn"  then LEVEL_WARN
+  when "error" then LEVEL_ERROR
+  when "fatal" then LEVEL_FATAL
+  else raise "Unknown log level: level = #{log_level_str}"
   end
 end
