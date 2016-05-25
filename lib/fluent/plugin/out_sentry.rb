@@ -69,7 +69,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
       :message => record['message']
     )
     
-    event.platform = determine_platform(record['tag'])
+    event.platform = determine_platform(tag)
     event.device = 'LOGIC HERE'
     
     event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').to_datetime : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
