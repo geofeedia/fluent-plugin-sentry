@@ -86,11 +86,11 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
   
   def determine_platform(record_tag)
     tag = record_tag.downcase
-    if taginclude? "csharp-appender"
+    if taginclude?("csharp-appender")
       return "csharp"
-    elsif tag.include? "lumberjack" 
+    elsif tag.include? ("lumberjack")
       return "node"
-    elsif tag.include? "logback" || tag.include? "log4j"
+    elsif (tag.include?("logback") || tag.include?("log4j"))
       return "java"
     else
       return "other"
