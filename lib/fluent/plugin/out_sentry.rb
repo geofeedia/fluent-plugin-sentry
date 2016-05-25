@@ -1,3 +1,5 @@
+require 'raven'
+
 class Fluent::SentryOutput < Fluent::BufferedOutput
   Fluent::Plugin.register_output('sentry', self)
 
@@ -15,7 +17,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
 
   def initialize
     require 'time'
-    require 'raven'
+#    require 'raven'
 
     super
   end
@@ -63,13 +65,13 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
   end
 
   def notify_sentry(tag, time, record)
-    event = Raven::Event.new(
+    event = Fluent::GFRavenEvent.new(
       :configuration => @configuration,
       :context => Raven::Context.new,
-      :message => record['message']
+      :message => record['message'],
+      :tag => tag
     )
     
-    event.platform = determine_platform(tag)
     event.device = 'LOGIC HERE'
     
     event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').to_datetime : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
@@ -83,17 +85,38 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
     event.extra = record.reject{ |key| EVENT_KEYS.include?(key) }
     @client.send_event(event)
   end
+end
+
+class Fluent::GFRavenEvent < Raven::Event
+  attr_accessor :tag
   
-  def determine_platform(record_tag)
-    tag = record_tag.downcase
-    if tag.include?("csharp-appender")
-      return "csharp"
-    elsif tag.include? ("lumberjack")
-      return "node"
-    elsif (tag.include?("logback") || tag.include?("log4j"))
-      return "java"
+  def initialize(init = {})
+    if init['tag']
+      _tag = init['tag']
+      init.delete('tag')
+      super
+      @tag = _tag
     else
-      return "other"
+      super
     end
+  end
+  
+  def to_hash
+    data = super
+    data.platform = determine_platform(@tag) 
+    return data
+  end
+end
+
+def determine_platform(record_tag)
+  tag = record_tag.downcase
+  if tag.include?("csharp-appender")
+    return "csharp"
+  elsif tag.include? ("lumberjack")
+    return "node"
+  elsif (tag.include?("logback") || tag.include?("log4j"))
+    return "java"
+  else
+    return "other"
   end
 end
