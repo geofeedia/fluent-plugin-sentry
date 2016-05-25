@@ -71,9 +71,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
       :message => record['message'],
       :tag => tag
     )
-    
-    event.device = 'LOGIC HERE'
-    
+        
     event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').to_datetime : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
     event.time_spent = record['time_spent'] || nil
     event.level = LOG_LEVEL.include?(tag.split('.').last.downcase) || @default_level
@@ -103,7 +101,7 @@ class Fluent::GFRavenEvent < Raven::Event
   
   def to_hash
     data = super
-    data.platform = determine_platform(@tag) 
+    data['platform'] = determine_platform(@tag)
     return data
   end
 end
