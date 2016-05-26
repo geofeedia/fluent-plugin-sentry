@@ -81,10 +81,10 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
       :tag => tag
     )
         
-    event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').to_datetime : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
+    event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').utc.strftime('%Y-%m-%dT%H:%M:%S') : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
     event.time_spent = record['time_spent'] || nil
     event.level = level || @default_level
-    event.logger = record['logger'] || @default_logger
+    event.logger = record['service'] || @default_logger
     event.culprit = record['culprit'] || nil
     event.server_name = record['server_name'] || @hostname
     event.release = record['release'] if record['release']
