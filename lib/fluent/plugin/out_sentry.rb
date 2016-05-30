@@ -119,7 +119,7 @@ def determine_platform(record_tag)
   tag = record_tag.downcase
   if tag.include?("csharp-appender")
     return "csharp"
-  elsif tag.include? ("lumberjack")
+  elsif tag.include?("lumberjack")
     return "node"
   elsif (tag.include?("logback") || tag.include?("log4j"))
     return "java"
