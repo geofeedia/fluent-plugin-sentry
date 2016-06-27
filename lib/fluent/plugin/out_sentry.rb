@@ -12,7 +12,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
 
   include Fluent::HandleTagNameMixin
 
-  LOG_LEVEL = %w(fatal error warning info debug trace)
+  LOG_LEVEL = %w(fatal error warn info debug trace)
   EVENT_KEYS = %w(message timestamp time_spent level logger culprit server_name release tags platform sdk device)
   DEFAULT_HOSTNAME_COMMAND = 'hostname'
   
@@ -25,6 +25,8 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
 
   def initialize
     require 'time'
+    @log_level_int = str_to_level(@log_level)
+
     super
   end
 
@@ -45,6 +47,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
     @configuration = Raven::Configuration.new
     @configuration.server = @endpoint_url
     @configuration.server_name = @hostname
+    @configuration.logger.level = Raven::Logger::WARN
     @client = Raven::Client.new(@configuration)
   end
 
@@ -64,7 +67,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
     chunk.msgpack_each do |tag, time, record|
       begin
         level = tag.split('.').last.downcase
-        if (LOG_LEVEL.include?(level) && (str_to_level(level) >= str_to_level(@log_level)))
+        if (LOG_LEVEL.include?(level) && (str_to_level(level) >= @log_level_int))
           notify_sentry(tag, time, record, level)
         end
       rescue => e
