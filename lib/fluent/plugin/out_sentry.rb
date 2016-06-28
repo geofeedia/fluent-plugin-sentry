@@ -1,12 +1,5 @@
 require 'raven'
 
-LEVEL_TRACE = 0
-LEVEL_DEBUG = 1
-LEVEL_INFO  = 2
-LEVEL_WARN  = 3
-LEVEL_ERROR = 4
-LEVEL_FATAL = 5
-
 class Fluent::SentryOutput < Fluent::BufferedOutput
   Fluent::Plugin.register_output('sentry', self)
 
@@ -25,7 +18,6 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
 
   def initialize
     require 'time'
-    @log_level_int = str_to_level(@log_level)
 
     super
   end
@@ -37,17 +29,29 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
       raise Fluent::ConfigError, "sentry: missing parameter for 'endpoint_url'"
     end
 
-    unless LOG_LEVEL.include?(@default_level)
+    unless Raven::Event::LOG_LEVELS.has_key?(@default_level)
       raise Fluent::ConfigError, "sentry: unsupported default reporting log level for 'default_level'"
     end
+
+    unless Raven::Event::LOG_LEVELS.has_key?(@log_level)
+      raise Fluent::ConfigError, "sentry: unsupported log level for 'log_level'"
+    end
+
+    @log_level_int = Raven::Event::LOG_LEVELS[@log_level]
 
     hostname_command = @hostname_command || DEFAULT_HOSTNAME_COMMAND
     @hostname = `#{hostname_command}`.chomp
 
+    logger = ::Logger.new(STDOUT)
+    logger.level = ::Logger::INFO
+    Raven.configure do |config|
+      config.logger = logger
+      config.silence_ready = true
+    end
+
     @configuration = Raven::Configuration.new
     @configuration.server = @endpoint_url
     @configuration.server_name = @hostname
-    @configuration.logger.level = Raven::Logger::WARN
     @client = Raven::Client.new(@configuration)
   end
 
@@ -67,7 +71,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
     chunk.msgpack_each do |tag, time, record|
       begin
         level = tag.split('.').last.downcase
-        if (LOG_LEVEL.include?(level) && (str_to_level(level) >= @log_level_int))
+        if (Raven::Event::LOG_LEVELS.has_key?(level) && (Raven::Event::LOG_LEVELS[level] >= @log_level_int))
           notify_sentry(tag, time, record, level)
         end
       rescue => e
@@ -83,16 +87,17 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
       :message => record['message'],
       :tag => tag
     )
-        
+
     event.timestamp = record['timestamp<ts>'] ? Time.strptime(record['timestamp<ts>'].to_s, '%Q').utc.strftime('%Y-%m-%dT%H:%M:%S') : Time.at(time).utc.strftime('%Y-%m-%dT%H:%M:%S')
     event.time_spent = record['time_spent'] || nil
     event.level = level || @default_level
     event.logger = record['service'] || @default_logger
     event.culprit = record['culprit'] || nil
     event.server_name = record['server_name'] || @hostname
-    event.release = record['release'] if record['release']
+    event.release = record['release'] || nil
     event.tags = event.tags.merge({ :tag => tag }.merge(record['tags'] || {}))
     event.extra = record.reject{ |key| EVENT_KEYS.include?(key) }
+
     @client.send_event(event)
   end
 end
@@ -128,17 +133,5 @@ def determine_platform(record_tag)
     return "java"
   else
     return "other"
-  end
-end
-
-def str_to_level(log_level_str)
-  case log_level_str.downcase
-  when "trace" then LEVEL_TRACE
-  when "debug" then LEVEL_DEBUG
-  when "info"  then LEVEL_INFO
-  when "warn"  then LEVEL_WARN
-  when "error" then LEVEL_ERROR
-  when "fatal" then LEVEL_FATAL
-  else raise "Unknown log level: level = #{log_level_str}"
   end
 end
