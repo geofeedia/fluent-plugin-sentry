@@ -72,7 +72,7 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
       begin
         level = tag.split('.').last.downcase
         if (Raven::Event::LOG_LEVELS.has_key?(level) && (Raven::Event::LOG_LEVELS[level] >= @log_level_int))
-          notify_sentry(tag, time, record, level)
+          notify_sentry(tag, time, record, Raven::Event::LOG_LEVELS[level])
         end
       rescue => e
         $log.error("Sentry Error:", :error_class => e.class, :error => e.message)
