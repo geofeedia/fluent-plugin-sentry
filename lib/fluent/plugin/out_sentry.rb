@@ -70,8 +70,13 @@ class Fluent::SentryOutput < Fluent::BufferedOutput
   def write(chunk)
     chunk.msgpack_each do |tag, time, record|
       begin
-        level = tag.split('.').last.downcase
+        level = ''
+        if record['level']
+          level = record['level'].downcase
+        end
+ 
         if (Raven::Event::LOG_LEVELS.has_key?(level) && (Raven::Event::LOG_LEVELS[level] >= @log_level_int))
+          # puts "record: " << record.to_s
           notify_sentry(tag, time, record, Raven::Event::LOG_LEVELS[level])
         end
       rescue => e
@@ -131,6 +136,8 @@ def determine_platform(record_tag)
     return "node"
   elsif (tag.include?("logback") || tag.include?("log4j"))
     return "java"
+  elsif tag.include?("golang")
+    return "go"
   else
     return "other"
   end
